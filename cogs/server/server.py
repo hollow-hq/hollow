@@ -11,7 +11,7 @@ from discord.ext import commands
 
 from core.client.embed import Embed
 from core.client.tagscript import TagScriptParser
-from core.client.EmbedBuilder import EmbedBuilder
+from core.client.EmbedBuilder import build_kwargs
 from core.client.commands import has_permissions, hybrid_command, hybrid_group
 from core.config import COLORS
 from core.context import hollowHelp
@@ -318,24 +318,13 @@ class Server(commands.Cog):
         return ctx.channel, text
 
     async def _render_with_tagscript_embed(self, ctx: commands.Context, raw: str) -> dict:
-        """Return send kwargs after TagScriptParser + EmbedBuilder."""
+        """Return send kwargs after TagScriptParser + the embed script builder."""
         # Use ctx.author as user for tagscript
         try:
             parsed = await TagScriptParser.parse(raw, ctx.author, ctx.guild, ctx.channel, self.bot)
         except Exception:
             parsed = raw
-        processed = EmbedBuilder.embed_replacement(ctx.author, parsed) or parsed
-        content, embed, view = await EmbedBuilder.to_object(processed)
-        kwargs: dict = {}
-        if embed is not None:
-            kwargs["embed"] = embed
-        if view and len(view.children) > 0:
-            kwargs["view"] = view
-        if content:
-            kwargs["content"] = content
-        elif embed is None:
-            kwargs["content"] = processed
-        return kwargs
+        return build_kwargs(parsed)
 
     async def _send_sticky(self, channel: discord.TextChannel, raw_message: str, author: discord.Member) -> Optional[discord.Message]:
         """Render and send sticky message, return sent message."""
@@ -343,17 +332,7 @@ class Server(commands.Cog):
             parsed = await TagScriptParser.parse(raw_message, author, channel.guild, channel, self.bot)
         except Exception:
             parsed = raw_message
-        processed = EmbedBuilder.embed_replacement(author, parsed) or parsed
-        content, embed, view = await EmbedBuilder.to_object(processed)
-        kwargs: dict = {}
-        if embed is not None:
-            kwargs["embed"] = embed
-        if view and len(view.children) > 0:
-            kwargs["view"] = view
-        if content:
-            kwargs["content"] = content
-        elif embed is None:
-            kwargs["content"] = processed
+        kwargs = build_kwargs(parsed)
         try:
             msg = await channel.send(**kwargs)
             await self._update_sticky_last(channel.id, msg.id)
@@ -460,18 +439,7 @@ class Server(commands.Cog):
     async def render(self, member: discord.Member, raw: str):
         """Parse tagscript + embed syntax, return send kwargs."""
         parsed = await TagScriptParser.parse(raw, member, member.guild, None, self.bot)
-        processed = EmbedBuilder.embed_replacement(member, parsed) or parsed
-        content, embed, view = await EmbedBuilder.to_object(processed)
-        kwargs = {}
-        if embed is not None:
-            kwargs["embed"] = embed
-        if view and len(view.children) > 0:
-            kwargs["view"] = view
-        if content:
-            kwargs["content"] = content
-        elif embed is None:
-            kwargs["content"] = processed
-        return kwargs
+        return build_kwargs(parsed)
 
     async def send_welcome(self, member: discord.Member) -> None:
         config = await self.get_config(member.guild.id)
@@ -1107,9 +1075,9 @@ class Server(commands.Cog):
         await ctx.send(**kwargs)
 
     @welcome_message.command(name="set",
-            description="Set a welcome message (Tagscript & EmbedBuilder supported)",
+            description="Set a welcome message (Tagscript & embed script supported)",
             example=",welcome message set Welcome {user.mention} to **{guild.name}**!")
-    @app_commands.describe(message="The welcome message (Tagscript/EmbedBuilder supported)")
+    @app_commands.describe(message="The welcome message (Tagscript/embed script supported)")
     @has_permissions(manage_guild=True)
     async def welcome_message_set(self, ctx: commands.Context, *, message: str):
         if len(message) > 4000:
@@ -1433,9 +1401,9 @@ class Server(commands.Cog):
         await ctx.send(**kwargs)
 
     @leaver_message.command(name="set",
-            description="Set a leave message (Tagscript & EmbedBuilder supported)",
+            description="Set a leave message (Tagscript & embed script supported)",
             example=",leaver message set {user.name} has left **{guild.name}**!")
-    @app_commands.describe(message="The leave message (Tagscript/EmbedBuilder supported)")
+    @app_commands.describe(message="The leave message (Tagscript/embed script supported)")
     @has_permissions(manage_guild=True)
     async def leaver_message_set(self, ctx: commands.Context, *, message: str):
         if len(message) > 4000:
@@ -1498,8 +1466,7 @@ class Server(commands.Cog):
         # validate render
         try:
             parsed = await TagScriptParser.parse(message, ctx.author, ctx.guild, channel, self.bot)
-            processed = EmbedBuilder.embed_replacement(ctx.author, parsed) or parsed
-            await EmbedBuilder.to_object(processed)
+            build_kwargs(parsed)
         except Exception as e:
             return await ctx.deny(f"That message could not be parsed: `{e}`")
         # delete previous sticky message if exists
@@ -1556,8 +1523,7 @@ class Server(commands.Cog):
             return await ctx.warn("Sticky message cannot be longer than **4000** characters.")
         try:
             parsed = await TagScriptParser.parse(new_message, ctx.author, ctx.guild, channel, self.bot)
-            processed = EmbedBuilder.embed_replacement(ctx.author, parsed) or parsed
-            await EmbedBuilder.to_object(processed)
+            build_kwargs(parsed)
         except Exception as e:
             return await ctx.deny(f"That message could not be parsed: `{e}`")
         await self.bot.db.execute(

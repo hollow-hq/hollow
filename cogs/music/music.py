@@ -21,7 +21,7 @@ POLL_INTERVAL = 15
 SEARCH_RESULTS_LIMIT = 10
 
 
-class MusicCog(commands.Cog):
+class Music(commands.Cog):
     """Production-grade music cog powered by Lavalink."""
 
     def __init__(self, bot: commands.Bot) -> None:
@@ -537,7 +537,7 @@ class TrackSelect(Select):
         try:
             index = int(self.values[0])
             track = self.tracks[index]
-            cog: "MusicCog" = self.ctx.cog
+            cog: "Music" = self.ctx.cog
             player = await cog._join(self.ctx)
             try:
                 player.queue.put(track)
@@ -584,4 +584,4 @@ class SearchView(View):
 
 
 async def setup(bot: commands.Bot) -> None:
-    await bot.add_cog(MusicCog(bot))
+    await bot.add_cog(Music(bot))

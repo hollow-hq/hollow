@@ -423,7 +423,6 @@ class Information(commands.Cog):
         )
 
     @hybrid_command(description="View someone's Spotify activity")
-    @app_commands.describe(user="The user whose Spotify activity to view (defaults to you)")
     async def spotify(self, ctx: commands.Context, *, user: Optional[discord.Member] = None):
         user = user or ctx.author
 
@@ -465,7 +464,6 @@ class Information(commands.Cog):
         await ctx.send(embed=embed)
 
     @hybrid_command(aliases=["invinfo"], description="View info about an invite")
-    @app_commands.describe(invite="The invite to view info about")
     async def inviteinfo(self, ctx: commands.Context, invite: Optional[str] = None):
         if not invite:
             return await ctx.send_help(ctx.command)

@@ -3,7 +3,7 @@ aiosqlite
 humanize
 python-dotenv
 discord-vr
-fishr
+#fishr
 Pillow
 ddgs
 aiohttp

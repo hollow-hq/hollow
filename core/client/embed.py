@@ -743,6 +743,13 @@ def _shim_from_real_embed(real: discord.Embed) -> Embed:
     return shim
 
 
+def _first_embed(embeds) -> Any:
+    """Return the first entry of an ``embeds=`` sequence, or None."""
+    if isinstance(embeds, Sequence) and len(embeds) > 0:
+        return embeds[0]
+    return None
+
+
 def _convert_embeds_in_kwargs(kwargs: dict) -> dict:
     """
     Convert our Embed instances in kwargs to LayoutView/components.
@@ -762,15 +769,21 @@ def _convert_embeds_in_kwargs(kwargs: dict) -> dict:
 
     view_val = new_kwargs.get("view")
     if view_val is not None and getattr(view_val, "_classic_passthrough", False):
+        # Opt-out of the V2 merge, but our Embed shim has no ``to_dict`` and
+        # would explode inside discord.py's handle_message_parameters. Downgrade
+        # it to a real discord.Embed first.
+        if _is_our_embed(new_kwargs.get("embed")):
+            new_kwargs["embed"] = new_kwargs["embed"].to_classic_embed()
+        elif _is_our_embed(_first_embed(new_kwargs.get("embeds"))):
+            new_kwargs["embeds"] = [
+                e.to_classic_embed() if _is_our_embed(e) else e
+                for e in new_kwargs["embeds"]
+            ]
         return new_kwargs
 
     will_convert_single = "embed" in new_kwargs and _is_our_embed(new_kwargs["embed"])
     embeds_val = new_kwargs.get("embeds")
-    will_convert_list = (
-        isinstance(embeds_val, Sequence)
-        and len(embeds_val) > 0
-        and _is_our_embed(embeds_val[0])
-    )
+    will_convert_list = _is_our_embed(_first_embed(embeds_val))
     # Real embed + interactive view (e.g. ban ConfirmView): convert as well
     # so the buttons render inside the Container instead of below it.
     real_embed = new_kwargs.get("embed")

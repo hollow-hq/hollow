@@ -14,7 +14,7 @@ from discord.ext import commands, tasks
 
 from core.client.embed import Embed
 from core.client.commands import has_permissions, hybrid_command, hybrid_group
-from core.client.EmbedBuilder import EmbedBuilder
+from core.client.EmbedBuilder import build_kwargs
 from core.client.tagscript import TagScriptParser
 from core.config import COLORS, EMOJIS
 from core.context import hollowHelp
@@ -258,7 +258,7 @@ async def render_message(
     channel: Optional[discord.abc.GuildChannel] = None,
     extra: Optional[dict[str, str]] = None,
 ) -> dict[str, Any]:
-    """Run raw text through TagScript and EmbedBuilder, returning send kwargs."""
+    """Run raw text through TagScript and the embed script builder, returning send kwargs."""
     if not raw:
         return {}
 
@@ -273,23 +273,14 @@ async def render_message(
             token = "{" + key + "}"
             text = text.replace(token, value)
 
-    try:
-        processed = EmbedBuilder.embed_replacement(author, text) or text
-    except Exception:
-        processed = text
-
-    content, embed, view = await EmbedBuilder.to_object(processed)
-
-    kwargs: dict[str, Any] = {}
-    if embed is not None:
-        kwargs["embed"] = embed
-    sent_view = _trim_view(view) if view and len(view.children) > 0 else None
-    if sent_view is not None and len(sent_view.children) > 0:
-        kwargs["view"] = sent_view
-    if content:
-        kwargs["content"] = content
-    elif embed is None:
-        kwargs["content"] = processed
+    kwargs: dict[str, Any] = build_kwargs(text)
+    view = kwargs.get("view")
+    if view is not None and getattr(view, "children", None):
+        sent_view = _trim_view(view)
+        if sent_view is not None and len(sent_view.children) > 0:
+            kwargs["view"] = sent_view
+        else:
+            kwargs.pop("view", None)
     return kwargs
 
 

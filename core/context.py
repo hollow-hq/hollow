@@ -228,12 +228,12 @@ class hollowHelp:
         bot: hollow = ctx.bot
 
         initial_cogs = [name for name in bot.cogs.keys() if name != "HelpCog"]
-
-        total_commands = sum(
-            len(hollowHelp.collect_commands(cog))
-            for name, cog in bot.cogs.items()
-            if name != "HelpCog"
-        )
+        total_commands = sum(len(list(cog.walk_commands())) for cog in bot.cogs.values())
+        # total_commands = sum(
+        #     len(hollowHelp.collect_commands(cog))
+        #     for name, cog in bot.cogs.items()
+        #     if name != "HelpCog"
+        # )
         total_categories = len(initial_cogs)
         thumbnail = "https://i.ibb.co.com/nNQZ7M3p/c0d5042b6d5202a834a47838ac450129.png"
         embed = (

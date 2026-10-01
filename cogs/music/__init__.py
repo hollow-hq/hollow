@@ -1,5 +1,5 @@
-from .music import MusicCog
+from .music import Music
 
 
 async def setup(bot):
-    await bot.add_cog(MusicCog(bot))
+    await bot.add_cog(Music(bot))

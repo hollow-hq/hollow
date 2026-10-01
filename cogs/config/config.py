@@ -678,10 +678,8 @@ class Config(commands.Cog):
     @app_commands.describe(script="The embed script to use")
     async def embed_create(self, ctx: commands.Context, *, script: str):
         try:
-            from core.client.EmbedBuilder import EmbedScript
-            converter = EmbedScript()
-            result = await converter.convert(ctx, script)
-            await ctx.send(**result)
+            from core.client.EmbedBuilder import to_object
+            await ctx.send(embed=to_object(script))
         except Exception as e:
             await ctx.deny(f"Failed to create embed: {e}")
 
@@ -750,7 +748,7 @@ class Config(commands.Cog):
 
     @embed.command(
         name="code",
-        description="Recreate a message's embed as an EmbedBuilder script",
+        description="Recreate a message's embed as an embed script",
         example="embed code [message_link]",
     )
     @app_commands.describe(message_link="The message link or ID to convert")
@@ -827,9 +825,7 @@ class Config(commands.Cog):
             if not row:
                 return await ctx.deny(f"No saved embed found with name `{name}`.")
 
-            from core.client.EmbedBuilder import EmbedScript
-            converter = EmbedScript()
-            result = await converter.convert(ctx, row["script"])
-            await ctx.send(**result)
+            from core.client.EmbedBuilder import to_object
+            await ctx.send(embed=to_object(row["script"]))
         except Exception as e:
             await ctx.deny(f"Failed to view embed: {e}")

@@ -1,4 +1,4 @@
-import os
+﻿import os
 import time
 from datetime import timedelta
 from typing import Optional
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import humanize
 
 from core.client.embed import Embed
+from core.client.todo import NESTED_GROUP_NAMES
 from core.context import Context
 from core.logger import log
 import core.client.interactions  # noqa: F401 - patches Interaction/Webhook
@@ -21,7 +22,8 @@ load_dotenv()
 OWNER_IDS = [int(x) for x in os.getenv("OWNER_IDS", "").split(",") if x.strip().isdigit()]
 DEFAULT_PREFIX = os.getenv("PREFIX", ",")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "core/schema/hollow.db")
-COMMANDS_API_URL = os.getenv("COMMANDS_API_URL", "https://hollow-phi.vercel.app/api/commands")
+COMMANDS_API_URL = os.getenv("COMMANDS_API_URL", "https://hollow-phi.vercel.app/api/commands/commands")
+BOT_API_KEY = os.getenv("BOT_API_KEY", "")
 
 
 class hollow(commands.AutoShardedBot):
@@ -65,7 +67,24 @@ class hollow(commands.AutoShardedBot):
                 prefixes = [DEFAULT_PREFIX]
 
         # Wrap with mention support
+        prefixes = list(prefixes)
+
+        # Auto-generated slash groups (see core/client/todo.py NESTED_GROUPS) also
+        # answer to their prefix name/aliases: `,moderation ban`, `,mod ban`, ...
+        group_name = NESTED_GROUP_NAMES.get(self._strip_prefix(message.content, prefixes))
+        if group_name:
+            prefixes.append(group_name)
+
         return commands.when_mentioned_or(*prefixes)(self, message)
+
+    @staticmethod
+    def _strip_prefix(content: str, prefixes: list) -> str:
+        """First whitespace separated token of `content` with a known prefix removed."""
+        stripped = content.strip()
+        for prefix in sorted((p for p in prefixes if p), key=len, reverse=True):
+            if stripped.startswith(prefix):
+                return stripped[len(prefix):].strip().split(" ")[0].casefold()
+        return ""
 
     async def get_context(self, origin, *, cls=MISSING):
         if cls is MISSING:
@@ -77,7 +96,22 @@ class hollow(commands.AutoShardedBot):
         log.banner("hollow", "discord bot")
         await self.initialize_database()
         await self.load_cogs()
+        self.register_auto_nested_groups()
         self.tree.on_error = self.on_app_command_error
+
+        from core.client.todo import GLOBAL_COMMAND_LIMIT
+        top_level = self.tree.get_commands(guild=None)
+        if len(top_level) > GLOBAL_COMMAND_LIMIT:
+            log.warning(
+                f"{len(top_level)} application commands exceed Discord's "
+                f"{GLOBAL_COMMAND_LIMIT} global limit - demote more commands in "
+                f"core/client/todo.py TEXT_ONLY_COMMANDS"
+            )
+        else:
+            log.info(
+                f"{len(top_level)}/{GLOBAL_COMMAND_LIMIT} global application command slots used"
+            )
+
         synced = await self.tree.sync()
         log.success(f"Synced {len(synced)} application commands")
 
@@ -235,22 +269,92 @@ class hollow(commands.AutoShardedBot):
         except Exception:
             return
 
-        if not synced_commands:
-            return
+        guilds_payload = []
+        for g in self.guilds:
+            guilds_payload.append({
+                "name": g.name,
+                "members": g.member_count or len(g.members) if hasattr(g, 'members') else 0,
+                "icon": g.icon.url if g and g.icon else "",
+                "verified": True,
+            })
+
+        total_users = 0
+        for g in self.guilds:
+            try:
+                total_users += g.member_count or len(g.members) if hasattr(g, 'members') else 0
+            except Exception:
+                pass
+
+        info_payload = {
+            "guilds": len(self.guilds),
+            "users": total_users,
+        }
+
+        base_url = COMMANDS_API_URL.replace("/api/commands/commands", "").rstrip("/")
+        headers = {"Content-Type": "application/json"}
+        if BOT_API_KEY:
+            headers["Authorization"] = f"Bearer {BOT_API_KEY}"
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.put(
-                    COMMANDS_API_URL,
-                    json={"commands": synced_commands, "usage": usage},
-                    headers={"Content-Type": "application/json"},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    if resp.status >= 400:
-                        text = await resp.text()
-                        log.error(f"Failed to sync commands: {resp.status} {text}")
+                if synced_commands:
+                    try:
+                        async with session.post(
+                            f"{base_url}/api/commands/commands",
+                            json={"commands": synced_commands},
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as resp:
+                            if resp.status >= 400:
+                                text = await resp.text()
+                                log.error(f"Failed to sync commands: {resp.status} {text}")
+                    except Exception:
+                        pass
+
+                if guilds_payload:
+                    try:
+                        async with session.post(
+                            f"{base_url}/api/guilds/guilds",
+                            json={"guilds": guilds_payload},
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as resp:
+                            if resp.status >= 400:
+                                text = await resp.text()
+                                log.error(f"Failed to sync guilds: {resp.status} {text}")
+                    except Exception:
+                        pass
+
+                if info_payload:
+                    try:
+                        async with session.post(
+                            f"{base_url}/api/info/info",
+                            json=info_payload,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as resp:
+                            if resp.status >= 400:
+                                text = await resp.text()
+                                log.error(f"Failed to sync info: {resp.status} {text}")
+                    except Exception:
+                        pass
         except Exception:
             pass
+
+    def register_auto_nested_groups(self) -> None:
+        """Add the auto-generated slash groups (e.g. /moderation) and their children.
+
+        Children were attached while the cogs were being decorated; adding them now
+        gives every one of them a cog, so `,ban` still routes to the right callback.
+        """
+        from core.client.commands import _AUTO_GROUPS
+
+        for group in _AUTO_GROUPS.values():
+            for child in group.commands:
+                if child.cog is None:
+                    owner = getattr(child.callback, "__self__", None)
+                    if owner is not None:
+                        child.cog = owner
 
     async def load_cogs(self) -> None:
         for root, dirs, files in os.walk("./cogs"):
@@ -263,7 +367,11 @@ class hollow(commands.AutoShardedBot):
                         await self.load_extension(f"cogs.{module_path}")
                         log.success(f"Loaded cog: cogs.{module_path}")
                     except Exception as e:
-                        log.error(f"Failed to load cog cogs.{module_path}: {e}")
+                        if type(e).__name__ == "CommandLimitReached":
+                            # keep loading the rest; the cog is skipped, not fatal
+                            log.warning(f"Skipped cog cogs.{module_path}: {e}")
+                        else:
+                            log.error(f"Failed to load cog cogs.{module_path}: {e}")
                 dirs.clear()  # don't descend, the package handles its own contents
                 continue
             for filename in files:
@@ -275,7 +383,10 @@ class hollow(commands.AutoShardedBot):
                     await self.load_extension(f"cogs.{module_path}")
                     log.success(f"Loaded cog: cogs.{module_path}")
                 except Exception as e:
-                    log.error(f"Failed to load cog cogs.{module_path}: {e}")
+                    if type(e).__name__ == "CommandLimitReached":
+                        log.warning(f"Skipped cog cogs.{module_path}: {e}")
+                    else:
+                        log.error(f"Failed to load cog cogs.{module_path}: {e}")
 
     def booted(self, unix: bool = False) -> str | float:
         if self.start_time is None:
@@ -296,3 +407,4 @@ class hollow(commands.AutoShardedBot):
 
 
 bot = hollow()
+

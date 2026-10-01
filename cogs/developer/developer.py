@@ -178,17 +178,17 @@ class Developer(Cog):
         await ctx.approve("This is an `approve` test — ✅")
         await ctx.deny("This is a `deny` test — ❌")
 
-    @command(name="cmdsync", description="Sync all command metadata and usage counts to the website", example=",cmdsync")
+    @command(name="websync", description="Sync all bot data (commands, guilds, info) to the website", example=",websync")
     @is_owner()
-    async def cmdsync(self, ctx: Context):
+    async def websync(self, ctx: Context):
         try:
             task = self.bot.sync_commands_json
             if not task.is_running():
                 task.start()
             await task()
-            await ctx.approve("Synced all command metadata and usage counts to the website.")
+            await ctx.approve("Synced all bot data to the website.")
         except Exception as e:
-            await ctx.deny(f"Failed to sync commands: `{e}`")
+            await ctx.deny(f"Failed to sync website: `{e}`")
 
     @command(name="sendshutdown_msg", description="Send shutdown message to all servers", example=",sendshutdown_msg")
     @is_owner()

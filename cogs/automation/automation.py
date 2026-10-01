@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from core.client.commands import has_permissions, hybrid_command, hybrid_group
 from core.client.tagscript import TagScriptParser
-from core.client.EmbedBuilder import EmbedBuilder
+from core.client.EmbedBuilder import build_kwargs
 from core.config import COLORS
 from core.context import hollowHelp
 
@@ -247,23 +247,12 @@ class Automation(commands.Cog):
         author: discord.abc.User,
         channel: discord.abc.Messageable,
     ) -> dict[str, Any]:
-        """Run TagScript + EmbedBuilder, returning send kwargs."""
+        """Run TagScript + the embed script builder, returning send kwargs."""
         guild = getattr(channel, "guild", None)
         parsed = await self._parse_tagscript(
             raw, author, guild, channel if isinstance(channel, discord.abc.GuildChannel) else None
         )
-        processed = EmbedBuilder.embed_replacement(author, parsed) or parsed
-        content, embed, view = await EmbedBuilder.to_object(processed)
-        kwargs: dict[str, Any] = {}
-        if embed is not None:
-            kwargs["embed"] = embed
-        if view and len(view.children) > 0:
-            kwargs["view"] = view
-        if content:
-            kwargs["content"] = content
-        elif embed is None:
-            kwargs["content"] = processed
-        return kwargs
+        return build_kwargs(parsed)
 # ------------------------------------------------------------------ #
     # Commands: autorole
     # ------------------------------------------------------------------ #
@@ -694,7 +683,7 @@ class Automation(commands.Cog):
     )
     @app_commands.describe(
         message="Text the user must send (use /regex/ for regex match)",
-        respond="Message to send back (supports TagScript + EmbedBuilder)",
+        respond="Message to send back (supports TagScript + embed script)",
     )
     async def trigger_add(self, ctx: commands.Context, message: str, *, respond: str):
         if not respond:

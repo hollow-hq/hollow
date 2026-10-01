@@ -684,3 +684,55 @@ CREATE INDEX IF NOT EXISTS antinuke_logs_guild_idx
     ON antinuke_logs (guild_id, created_at);
 CREATE INDEX IF NOT EXISTS antinuke_logs_executor_idx
     ON antinuke_logs (guild_id, executor_id, created_at);
+
+-- ── cogs/tickets ──
+-- Per-guild ticket configuration: where tickets live, who can staff them,
+-- what the panel says and how transcripts are delivered.
+CREATE TABLE IF NOT EXISTS tickets_config (
+    guild_id INTEGER PRIMARY KEY,
+    category_id INTEGER,
+    log_channel_id INTEGER,
+    support_roles TEXT NOT NULL DEFAULT '[]',   -- json [int, ...]
+    panel_title TEXT NOT NULL DEFAULT 'Support Tickets',
+    panel_description TEXT NOT NULL DEFAULT 'Open a ticket to get help.',
+    panel_emoji TEXT DEFAULT '\U0001f3e1',
+    button_label TEXT NOT NULL DEFAULT 'Open a Ticket',
+    max_open INTEGER NOT NULL DEFAULT 1,
+    transcript_format TEXT NOT NULL DEFAULT 'html',  -- html | txt
+    delete_on_close INTEGER NOT NULL DEFAULT 1,
+    dm_on_close INTEGER NOT NULL DEFAULT 1
+);
+
+-- One row per ticket, kept after close so transcripts stay auditable.
+CREATE TABLE IF NOT EXISTS tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    channel_id INTEGER UNIQUE,
+    number INTEGER NOT NULL,
+    opener_id INTEGER NOT NULL,
+    staff_id INTEGER,
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'open',   -- open | closed | deleted
+    close_reason TEXT,
+    closed_by INTEGER,
+    opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    closed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS tickets_guild_idx ON tickets (guild_id, status);
+CREATE INDEX IF NOT EXISTS tickets_opener_idx ON tickets (guild_id, opener_id, status);
+
+-- Monotonic per-guild ticket number used in channel names / transcripts.
+CREATE TABLE IF NOT EXISTS ticket_counters (
+    guild_id INTEGER PRIMARY KEY,
+    counter INTEGER NOT NULL DEFAULT 0
+);
+
+-- Members blocked from opening tickets.
+CREATE TABLE IF NOT EXISTS ticket_blacklist (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    moderator_id INTEGER,
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (guild_id, user_id)
+);

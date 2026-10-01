@@ -4,7 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core.client.todo import (
+from core.client.reduceslash import (
     NESTED_GROUPS,
     is_text_only,
     nested_group_aliases,

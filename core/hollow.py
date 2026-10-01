@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 import humanize
 
 from core.client.embed import Embed
-from core.client.todo import NESTED_GROUP_NAMES
+from core.client.reduceslash import NESTED_GROUP_NAMES
 from core.context import Context
 from core.logger import log
 import core.client.interactions  # noqa: F401 - patches Interaction/Webhook
@@ -99,7 +99,7 @@ class hollow(commands.AutoShardedBot):
         self.register_auto_nested_groups()
         self.tree.on_error = self.on_app_command_error
 
-        from core.client.todo import GLOBAL_COMMAND_LIMIT
+        from core.client.reduceslash import GLOBAL_COMMAND_LIMIT
         top_level = self.tree.get_commands(guild=None)
         if len(top_level) > GLOBAL_COMMAND_LIMIT:
             log.warning(
